@@ -6,6 +6,7 @@
 *.lo
 *.o
 *.obj
+obj_dir/
 
 # Precompiled Headers
 *.gch
@@ -39,3 +40,6 @@
 
 # debug information files
 *.dwo
+
+# ide
+.vscode/
