@@ -1,0 +1,77 @@
+[*]
+[*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
+[*] Wed Jul 23 17:27:53 2025
+[*]
+[dumpfile] "/home/mccod/fpga_projects/servo_controller/result_sim.fst"
+[dumpfile_mtime] "Wed Jul 23 17:12:31 2025"
+[dumpfile_size] 1434
+[savefile] "/home/mccod/fpga_projects/servo_controller/sims_result/axilite_slave_servo_config.gtkw"
+[timestart] 0
+[size] 1908 999
+[pos] 32767 32767
+*-20.931568 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[sst_width] 214
+[signals_width] 142
+[sst_expanded] 1
+[sst_vpaned_height] 292
+@100000028
+TOP.ACLK
+@28
+TOP.ARESETn
+@200
+-
+@22
+[color] 1
+TOP.AWADDR[31:0]
+@28
+[color] 1
+TOP.AWPROT[2:0]
+[color] 1
+TOP.AWVALID
+[color] 1
+TOP.AWREADY
+@200
+-
+@22
+TOP.WDATA[31:0]
+TOP.WSTRB[3:0]
+@28
+TOP.WVALID
+TOP.WREADY
+@200
+-
+@28
+[color] 5
+TOP.BRESP[1:0]
+[color] 5
+TOP.BVALID
+[color] 5
+TOP.BREADY
+@200
+-
+@22
+TOP.ARADDR[31:0]
+@28
+TOP.ARPROT[2:0]
+TOP.ARVALID
+TOP.ARREADY
+@200
+-
+@22
+[color] 2
+TOP.RDATA[31:0]
+@28
+[color] 2
+TOP.RRESP[1:0]
+[color] 2
+TOP.RVALID
+[color] 2
+TOP.RREADY
+@200
+-
+@28
+TOP.out_cont
+TOP.cont_is_active
+[pattern_trace] 1
+[pattern_trace] 0
