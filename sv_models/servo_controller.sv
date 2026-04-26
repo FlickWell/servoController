@@ -1,4 +1,15 @@
-module ServoController(
+module servo_controller #(
+	parameter int unsigned CLK_FREQ_HZ = 50_000_000,
+
+	parameter int unsigned MIN_HIGH_STATE_DURATION_US = 500,
+	parameter int unsigned MAX_HIGH_STATE_DURATION_US = 2_500,
+	parameter int unsigned FULL_PERIOD_DURATION_US = 20_000,
+
+	parameter int unsigned MAX_ANGLE = 180,
+
+	parameter int unsigned CNT_BIT_FOR_FRACT_PART = 10
+)
+(
 	input logic clk,
 	input logic nreset,
 	input logic en_cont,
@@ -9,10 +20,16 @@ module ServoController(
 	);
 
 	// localparams
-	localparam INPUT_FREQ_HZ = 1_000_000;
-	localparam PERIOD_DURATION_IN_TICKS = INPUT_FREQ_HZ / 1000 * 20;
-	localparam ONE_DEGREE_IN_TICKS = 11;
-	localparam ADDING_FOR_TIME_RANGE_IN_TICKS = 500;
+	localparam real CLK_PERIOD_DURATION_US = 1 / CLK_FREQ_HZ * 1_000_000;
+
+	localparam int unsigned CNT_TICKS_FOR_FULL_PERIOD = FULL_PERIOD_DURATION_US / CLK_PERIOD_DURATION_US;
+	localparam int unsigned CNT_TICKS_FOR_MIN_HIGH_STATE = 
+		MIN_HIGH_STATE_DURATION_US / CLK_PERIOD_DURATION_US;
+	localparam int unsigned CNT_TICKS_FOR_MAX_HIGH_STATE = 
+		MAX_HIGH_STATE_DURATION_US / CLK_PERIOD_DURATION_US;
+
+	localparam int unsigned K_VALUE = 
+		((CNT_TICKS_FOR_MAX_HIGH_STATE - CNT_TICKS_FOR_MIN_HIGH_STATE) << CNT_BIT_FOR_FRACT_PART) / 180;
 
 	// states of controller
 	typedef enum logic [1:0] {
@@ -58,7 +75,7 @@ module ServoController(
 				end
 			end
 			CONT_EN_L: begin
-				if (cnt_ticks == PERIOD_DURATION_IN_TICKS - 1) begin
+				if (cnt_ticks == CNT_TICKS_FOR_FULL_PERIOD - 1) begin
 					if (en_cont) begin
 						nextstate = CONT_EN_H;
 					end
@@ -82,7 +99,7 @@ module ServoController(
 		if (!nreset || state == IDLE) begin
 			cnt_ticks <= 0;
 		end
-		else if (cnt_ticks == PERIOD_DURATION_IN_TICKS - 1) begin
+		else if (cnt_ticks == CNT_TICKS_FOR_FULL_PERIOD - 1) begin
 			cnt_ticks <= 0;
 		end
 		else begin
@@ -100,7 +117,7 @@ module ServoController(
 			if (!en_cont) begin
 				next_angle <= angle;
 			end
-			else if (cnt_ticks == PERIOD_DURATION_IN_TICKS - 1) begin
+			else if (cnt_ticks == CNT_TICKS_FOR_FULL_PERIOD - 1) begin
 				next_angle <= angle;
 			end
 		end
@@ -112,10 +129,11 @@ module ServoController(
 
 	always_comb begin
 		if (next_angle == '0) begin
-			cnt_high_ticks_sig = ADDING_FOR_TIME_RANGE_IN_TICKS;
+			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE;
 		end
 		else begin
-			cnt_high_ticks_sig = ADDING_FOR_TIME_RANGE_IN_TICKS + (next_angle * ONE_DEGREE_IN_TICKS);
+			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE + 
+				(next_angle * K_VALUE + (1 << (CNT_BIT_FOR_FRACT_PART - 1)) >> CNT_BIT_FOR_FRACT_PART);
 		end
 	end
 
@@ -132,4 +150,4 @@ module ServoController(
 assign out_cont = (state == CONT_EN_H) ? 1'b1 : 1'b0;
 assign st_cont_is_active = (state == CONT_EN_H || state == CONT_EN_L) ? 1'b1 : 1'b0;
 	
-endmodule : ServoController
+endmodule : servo_controller
