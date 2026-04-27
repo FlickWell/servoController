@@ -1,44 +1,47 @@
+import servo_controller_pkg;
+
 module servo_controller #(
-	parameter int unsigned CLK_FREQ_HZ = 50_000_000,
+	parameter int unsigned CLK_FREQ_HZ,
 
-	parameter int unsigned MIN_HIGH_STATE_DURATION_US = 500,
-	parameter int unsigned MAX_HIGH_STATE_DURATION_US = 2_500,
-	parameter int unsigned FULL_PERIOD_DURATION_US = 20_000,
+	parameter int unsigned MIN_HIGH_STATE_DURATION_US,
+	parameter int unsigned MAX_HIGH_STATE_DURATION_US,
+	parameter int unsigned FULL_PERIOD_DURATION_US,
 
-	parameter int unsigned MAX_ANGLE = 180,
+	parameter int unsigned MAX_ANGLE,
 
-	parameter int unsigned CNT_BIT_FOR_FRACT_PART = 10
+	parameter int unsigned CNT_BIT_FOR_FRACT_PART
 )
 (
 	input logic clk,
 	input logic nreset,
 	input logic en_cont,
-	input logic [7:0] angle,
+	input logic [$clog2(MAX_ANGLE)-1:0] angle,
 
 	output logic out_cont,
 	output logic st_cont_is_active
 	);
 
 	// localparams
-	localparam real CLK_PERIOD_DURATION_US = 1 / CLK_FREQ_HZ * 1_000_000;
+	localparam real CLK_PERIOD_DURATION_US = servo_controller_pkg::calc_CLK_PERIOD_DURATION_US(CLK_FREQ_HZ);
 
-	localparam int unsigned CNT_TICKS_FOR_FULL_PERIOD = FULL_PERIOD_DURATION_US / CLK_PERIOD_DURATION_US;
+	localparam int unsigned CNT_TICKS_FOR_FULL_PERIOD = 
+		servo_controller_pkg::calc_CNT_TICKS_FOR_FULL_PERIOD(FULL_PERIOD_DURATION_US, CLK_PERIOD_DURATION_US);
 	localparam int unsigned CNT_TICKS_FOR_MIN_HIGH_STATE = 
-		MIN_HIGH_STATE_DURATION_US / CLK_PERIOD_DURATION_US;
+		servo_controller_pkg::calc_CNT_TICKS_FOR_MIN_HIGH_STATE(MIN_HIGH_STATE_DURATION_US, CLK_PERIOD_DURATION_US);
 	localparam int unsigned CNT_TICKS_FOR_MAX_HIGH_STATE = 
-		MAX_HIGH_STATE_DURATION_US / CLK_PERIOD_DURATION_US;
+		servo_controller_pkg::calc_CNT_TICKS_FOR_MAX_HIGH_STATE(MAX_HIGH_STATE_DURATION_US, CLK_PERIOD_DURATION_US);
 
 	localparam int unsigned K_VALUE = 
-		((CNT_TICKS_FOR_MAX_HIGH_STATE - CNT_TICKS_FOR_MIN_HIGH_STATE) << CNT_BIT_FOR_FRACT_PART) / 180;
+		servo_controller_pkg::calc_K_VALUE(CNT_TICKS_FOR_MAX_HIGH_STATE, CNT_TICKS_FOR_MIN_HIGH_STATE, CNT_BIT_FOR_FRACT_PART);
 
 	// states of controller
 	typedef enum logic [1:0] {
 		IDLE,
 		CONT_EN_H,
 		CONT_EN_L
-	} statetype;
+	} state_t;
 	
-	statetype state, nextstate;
+	state_t state, nextstate;
 
 	// reg of state
 	always_ff @(posedge clk, negedge nreset) begin
@@ -94,7 +97,7 @@ module servo_controller #(
 	end
 
 	// counter
-	logic [31:0] cnt_ticks;
+	logic [$clog2(CNT_TICKS_FOR_FULL_PERIOD)-1:0] cnt_ticks;
 	always_ff @(posedge clk, negedge nreset) begin
 		if (!nreset || state == IDLE) begin
 			cnt_ticks <= 0;
@@ -108,7 +111,7 @@ module servo_controller #(
 	end
 
 	// control new angle
-	logic [7:0] next_angle;
+	logic [$clog2(MAX_ANGLE)-1:0] next_angle;
 	always_ff @(posedge clk, negedge nreset) begin
 		if (!nreset) begin
 			next_angle <= 0;
@@ -124,16 +127,23 @@ module servo_controller #(
 	end
 
 	// calculate cnt_ticks for high and low states
-	logic [31:0] cnt_high_ticks_sig;
-	logic [31:0] cnt_high_ticks_reg;
+	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_sig;
+	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_reg;
 
 	always_comb begin
 		if (next_angle == '0) begin
 			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE;
 		end
 		else begin
-			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE + 
-				(next_angle * K_VALUE + (1 << (CNT_BIT_FOR_FRACT_PART - 1)) >> CNT_BIT_FOR_FRACT_PART);
+			cnt_high_ticks_sig = servo_controller_pkg::calc_cnt_ticks_for_high_state #(
+				.MAX_ANGLE(MAX_ANGLE),
+				.CNT_TICKS_FOR_MAX_HIGH_STATE(CNT_TICKS_FOR_MAX_HIGH_STATE)
+			)(
+				next_angle,
+				CNT_TICKS_FOR_MIN_HIGH_STATE,
+				K_VALUE,
+				CNT_BIT_FOR_FRACT_PART
+			);
 		end
 	end
 
