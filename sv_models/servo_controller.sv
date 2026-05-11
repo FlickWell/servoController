@@ -1,15 +1,11 @@
-import servo_controller_pkg;
-
 module servo_controller #(
-	parameter int unsigned CLK_FREQ_HZ,
+	parameter int unsigned CLK_FREQ_MHz,
 
 	parameter int unsigned MIN_HIGH_STATE_DURATION_US,
 	parameter int unsigned MAX_HIGH_STATE_DURATION_US,
 	parameter int unsigned FULL_PERIOD_DURATION_US,
 
-	parameter int unsigned MAX_ANGLE,
-
-	parameter int unsigned CNT_BIT_FOR_FRACT_PART
+	parameter int unsigned MAX_ANGLE
 )
 (
 	input logic clk,
@@ -22,17 +18,18 @@ module servo_controller #(
 	);
 
 	// localparams
-	localparam real CLK_PERIOD_DURATION_US = servo_controller_pkg::calc_CLK_PERIOD_DURATION_US(CLK_FREQ_HZ);
+	localparam int unsigned CNT_TICKS_FOR_FULL_PERIOD = servo_controller_pkg::calc_cnt_ticks_for_duration(FULL_PERIOD_DURATION_US, CLK_FREQ_MHz);
+	localparam int unsigned CNT_TICKS_FOR_MIN_HIGH_STATE = servo_controller_pkg::calc_cnt_ticks_for_duration(MIN_HIGH_STATE_DURATION_US, CLK_FREQ_MHz);
+	localparam int unsigned CNT_TICKS_FOR_MAX_HIGH_STATE = servo_controller_pkg::calc_cnt_ticks_for_duration(MAX_HIGH_STATE_DURATION_US, CLK_FREQ_MHz);
+	localparam int unsigned CNT_TICKS_FOR_ONE_DEGREE = (CNT_TICKS_FOR_MAX_HIGH_STATE - CNT_TICKS_FOR_MIN_HIGH_STATE) / 180;
 
-	localparam int unsigned CNT_TICKS_FOR_FULL_PERIOD = 
-		servo_controller_pkg::calc_CNT_TICKS_FOR_FULL_PERIOD(FULL_PERIOD_DURATION_US, CLK_PERIOD_DURATION_US);
-	localparam int unsigned CNT_TICKS_FOR_MIN_HIGH_STATE = 
-		servo_controller_pkg::calc_CNT_TICKS_FOR_MIN_HIGH_STATE(MIN_HIGH_STATE_DURATION_US, CLK_PERIOD_DURATION_US);
-	localparam int unsigned CNT_TICKS_FOR_MAX_HIGH_STATE = 
-		servo_controller_pkg::calc_CNT_TICKS_FOR_MAX_HIGH_STATE(MAX_HIGH_STATE_DURATION_US, CLK_PERIOD_DURATION_US);
+	// signals and registers
+	logic [$clog2(CNT_TICKS_FOR_FULL_PERIOD)-1:0] cnt_ticks;
 
-	localparam int unsigned K_VALUE = 
-		servo_controller_pkg::calc_K_VALUE(CNT_TICKS_FOR_MAX_HIGH_STATE, CNT_TICKS_FOR_MIN_HIGH_STATE, CNT_BIT_FOR_FRACT_PART);
+	logic [$clog2(MAX_ANGLE)-1:0] next_angle;
+
+	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_sig;
+	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_reg;
 
 	// states of controller
 	typedef enum logic [1:0] {
@@ -44,7 +41,7 @@ module servo_controller #(
 	state_t state, nextstate;
 
 	// reg of state
-	always_ff @(posedge clk, negedge nreset) begin
+	always_ff @(posedge clk) begin
 		if (~nreset) begin
 			state <= IDLE;
 		end
@@ -97,8 +94,7 @@ module servo_controller #(
 	end
 
 	// counter
-	logic [$clog2(CNT_TICKS_FOR_FULL_PERIOD)-1:0] cnt_ticks;
-	always_ff @(posedge clk, negedge nreset) begin
+	always_ff @(posedge clk) begin
 		if (!nreset || state == IDLE) begin
 			cnt_ticks <= 0;
 		end
@@ -111,8 +107,7 @@ module servo_controller #(
 	end
 
 	// control new angle
-	logic [$clog2(MAX_ANGLE)-1:0] next_angle;
-	always_ff @(posedge clk, negedge nreset) begin
+	always_ff @(posedge clk) begin
 		if (!nreset) begin
 			next_angle <= 0;
 		end
@@ -127,27 +122,16 @@ module servo_controller #(
 	end
 
 	// calculate cnt_ticks for high and low states
-	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_sig;
-	logic [$clog2(CNT_TICKS_FOR_MAX_HIGH_STATE)-1:0] cnt_high_ticks_reg;
-
 	always_comb begin
 		if (next_angle == '0) begin
 			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE;
 		end
 		else begin
-			cnt_high_ticks_sig = servo_controller_pkg::calc_cnt_ticks_for_high_state #(
-				.MAX_ANGLE(MAX_ANGLE),
-				.CNT_TICKS_FOR_MAX_HIGH_STATE(CNT_TICKS_FOR_MAX_HIGH_STATE)
-			)(
-				next_angle,
-				CNT_TICKS_FOR_MIN_HIGH_STATE,
-				K_VALUE,
-				CNT_BIT_FOR_FRACT_PART
-			);
+			cnt_high_ticks_sig = CNT_TICKS_FOR_MIN_HIGH_STATE + (next_angle * CNT_TICKS_FOR_ONE_DEGREE);
 		end
 	end
 
-	always_ff @(posedge clk, negedge nreset) begin
+	always_ff @(posedge clk) begin
 		if (!nreset) begin
 			cnt_high_ticks_reg <= 0;
 		end
